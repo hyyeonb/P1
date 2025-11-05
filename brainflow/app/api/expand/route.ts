@@ -18,7 +18,10 @@ export async function POST(request: NextRequest) {
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
-        { error: 'OPENAI_API_KEY가 설정되지 않았습니다.' },
+        {
+          error: 'OPENAI_API_KEY가 설정되지 않았습니다.',
+          help: 'brainflow 폴더에 .env.local 파일을 만들고 OPENAI_API_KEY=sk-... 형식으로 설정하세요.'
+        },
         { status: 500 }
       )
     }

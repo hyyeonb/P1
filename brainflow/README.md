@@ -15,31 +15,66 @@ AI 기반 무한 확장 브레인스토밍 마인드맵
 
 ### 1. 환경 변수 설정
 
-`.env.local` 파일 생성:
+**중요:** Next.js에서 환경 변수가 제대로 작동하려면:
 
-\`\`\`bash
-cp .env.local.example .env.local
-\`\`\`
+#### Option A: .env.local 파일 사용
 
-`.env.local`에 OpenAI API 키 입력:
+`brainflow` 폴더(package.json이 있는 곳)에 `.env.local` 파일을 생성:
 
-\`\`\`
-OPENAI_API_KEY=sk-...
-\`\`\`
+```bash
+OPENAI_API_KEY=sk-your-key-here
+```
+
+**주의사항:**
+- 파일 위치: `C:\STN\ETC\P1\brainflow\.env.local` (Windows)
+- 또는: `/home/user/P1/brainflow/.env.local` (Linux)
+- **파일 이름**: `.env.local` (점으로 시작!)
+- **인코딩**: UTF-8
+- **줄바꿈**: LF (Unix 스타일)
+
+#### Option B: 시스템 환경 변수 (Windows)
+
+```powershell
+# PowerShell에서 (임시)
+$env:OPENAI_API_KEY = "sk-your-key-here"
+npm run dev
+
+# 또는 영구 설정 (관리자 권한)
+[Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "sk-your-key-here", "User")
+```
 
 ### 2. 의존성 설치
 
-\`\`\`bash
+```bash
 npm install
-\`\`\`
+```
 
 ### 3. 개발 서버 실행
 
-\`\`\`bash
+```bash
 npm run dev
-\`\`\`
+```
 
 http://localhost:3000 접속!
+
+### 4. 문제 해결
+
+**"OPENAI_API_KEY가 설정되지 않았습니다" 오류가 계속 뜨면:**
+
+1. **서버를 완전히 종료** (Ctrl+C)
+2. PowerShell 창도 완전히 닫기
+3. 새 PowerShell 창 열기
+4. `brainflow` 폴더로 이동
+5. `.env.local` 파일이 있는지 확인: `ls .env.local`
+6. 파일 내용 확인: `cat .env.local`
+7. 다시 시작: `npm run dev`
+
+**여전히 안 되면 임시 방법:**
+
+```powershell
+# 실행할 때마다 환경 변수 설정
+$env:OPENAI_API_KEY="sk-your-key"; npm run dev
+```
 
 ## 💰 수익화 모델 (향후 계획)
 
@@ -64,7 +99,7 @@ http://localhost:3000 접속!
 
 ## 📁 프로젝트 구조
 
-\`\`\`
+```
 brainflow/
 ├── app/
 │   ├── page.tsx           # 메인 페이지 (키워드 입력)
@@ -77,7 +112,7 @@ brainflow/
 │   ├── BrainFlowCanvas.tsx  # 메인 캔버스
 │   └── CustomNode.tsx       # 동그란 노드 컴포넌트
 └── package.json
-\`\`\`
+```
 
 ## 🎯 사용 예시
 
@@ -100,10 +135,22 @@ brainflow/
 ## 🐛 문제 해결
 
 ### "API 키 오류"가 뜨면?
-`.env.local` 파일에 `OPENAI_API_KEY`가 올바르게 설정되었는지 확인하세요.
+
+1. `.env.local` 파일이 `brainflow` 폴더(package.json 옆)에 있는지 확인
+2. 파일 내용: `OPENAI_API_KEY=sk-...` (따옴표 없이!)
+3. 서버를 **완전히 재시작** (Ctrl+C 후 `npm run dev`)
+4. PowerShell도 재시작해보기
 
 ### 노드가 안 펼쳐지면?
+
 개발자 도구(F12) → Console에서 에러 메시지를 확인하세요.
+
+### Windows에서 .env.local이 작동하지 않으면?
+
+임시 해결책:
+```powershell
+$env:OPENAI_API_KEY="sk-your-key"; npm run dev
+```
 
 ## 📄 라이선스
 
