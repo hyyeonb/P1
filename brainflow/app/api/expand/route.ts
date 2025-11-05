@@ -5,6 +5,37 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
 })
 
+// Mock 데이터 생성 함수 (API 크레딧 없이 테스트용)
+function generateMockKeywords(keyword: string): string[] {
+  const mockDatabase: Record<string, string[]> = {
+    '인공지능': ['머신러닝', '딥러닝', '자연어처리', '컴퓨터 비전', 'AI 윤리', 'ChatGPT', '자동화'],
+    '비즈니스': ['스타트업', '마케팅', '재무관리', '인사관리', '전략기획', '고객관리'],
+    '프로그래밍': ['웹개발', '앱개발', '데이터베이스', 'API', '알고리즘', '디버깅'],
+    '대한민국': ['역사', '문화', '정치', '경제', '지리', 'K-POP', '한국음식'],
+    '기후변화': ['온실가스', '재생에너지', '탄소중립', '지구온난화', '환경보호', '친환경'],
+    '스타트업': ['MVP', '투자유치', '린스타트업', '피벗', '그로스해킹', '시리즈A'],
+    '마케팅': ['콘텐츠마케팅', 'SEO', 'SNS마케팅', '브랜딩', '퍼포먼스마케팅', '인플루언서'],
+  }
+
+  // 정확히 일치하는 키워드가 있으면 반환
+  const lowerKeyword = keyword.toLowerCase().trim()
+  for (const [key, value] of Object.entries(mockDatabase)) {
+    if (key.toLowerCase().includes(lowerKeyword) || lowerKeyword.includes(key.toLowerCase())) {
+      return value
+    }
+  }
+
+  // 없으면 일반적인 하위 주제 생성
+  return [
+    `${keyword} 정의`,
+    `${keyword} 역사`,
+    `${keyword} 현황`,
+    `${keyword} 미래`,
+    `${keyword} 활용`,
+    `${keyword} 문제점`,
+  ]
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { keyword } = await request.json()
@@ -16,16 +47,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        {
-          error: 'OPENAI_API_KEY가 설정되지 않았습니다.',
-          help: 'brainflow 폴더에 .env.local 파일을 만들고 OPENAI_API_KEY=sk-... 형식으로 설정하세요.'
-        },
-        { status: 500 }
-      )
+    // Mock 모드 체크 (API 크레딧 없어도 테스트 가능)
+    const useMockMode = !process.env.OPENAI_API_KEY || process.env.MOCK_MODE === 'true'
+
+    if (useMockMode) {
+      console.log(`🎭 Mock 모드로 실행: ${keyword}`)
+      // 약간의 지연 추가 (실제 API 호출처럼 보이게)
+      await new Promise(resolve => setTimeout(resolve, 800))
+
+      const keywords = generateMockKeywords(keyword)
+      return NextResponse.json({
+        keywords,
+        mock: true,
+        message: '💡 Mock 데이터입니다. 실제 AI는 OpenAI API 크레딧이 필요합니다.'
+      })
     }
 
+    // 실제 OpenAI API 호출
     const prompt = `주제: "${keyword}"
 
 위 주제와 관련된 5-7개의 하위 주제나 연관 키워드를 생성해주세요.
@@ -79,9 +117,23 @@ export async function POST(request: NextRequest) {
       keywords = ['관련 주제 1', '관련 주제 2', '관련 주제 3', '관련 주제 4', '관련 주제 5']
     }
 
-    return NextResponse.json({ keywords })
+    return NextResponse.json({ keywords, mock: false })
   } catch (error: any) {
     console.error('Error:', error)
+
+    // 429 에러 (크레딧 부족) 시 자동으로 Mock 모드로 전환
+    if (error.status === 429 || error.code === 'insufficient_quota') {
+      console.log('💳 OpenAI 크레딧 부족 - Mock 모드로 전환')
+      const { keyword } = await request.json()
+      const keywords = generateMockKeywords(keyword)
+
+      return NextResponse.json({
+        keywords,
+        mock: true,
+        warning: '⚠️ OpenAI API 크레딧이 부족합니다. Mock 데이터로 실행 중입니다. https://platform.openai.com/account/billing 에서 크레딧을 충전하세요.'
+      })
+    }
+
     const errorMessage = error?.message || error?.toString() || '서버 오류가 발생했습니다.'
     return NextResponse.json(
       {
