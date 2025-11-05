@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
+import Anthropic from '@anthropic-ai/sdk'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || '',
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '',
 })
 
 // Mock 데이터 생성 함수 (API 크레딧 없이 테스트용)
@@ -47,8 +47,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY
+
     // Mock 모드 체크 (API 크레딧 없어도 테스트 가능)
-    const useMockMode = !process.env.OPENAI_API_KEY || process.env.MOCK_MODE === 'true'
+    const useMockMode = !apiKey || process.env.MOCK_MODE === 'true'
 
     if (useMockMode) {
       console.log(`🎭 Mock 모드로 실행: ${keyword}`)
@@ -59,11 +61,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         keywords,
         mock: true,
-        message: '💡 Mock 데이터입니다. 실제 AI는 OpenAI API 크레딧이 필요합니다.'
+        message: '💡 Mock 데이터입니다. 실제 AI는 Claude API 키가 필요합니다. https://console.anthropic.com/settings/keys 에서 발급받으세요.'
       })
     }
 
-    // 실제 OpenAI API 호출
+    // 실제 Claude API 호출
     const prompt = `주제: "${keyword}"
 
 위 주제와 관련된 5-7개의 하위 주제나 연관 키워드를 생성해주세요.
@@ -77,25 +79,22 @@ export async function POST(request: NextRequest) {
 
 예시:
 주제: "인공지능"
-결과: ["머신러닝", "딥러닝", "자연어처리", "컴퓨터 비전", "AI 윤리", "ChatGPT", "자동화"]`
+결과: ["머신러닝", "딥러닝", "자연어처리", "컴퓨터 비전", "AI 윤리", "ChatGPT", "자동화"]
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+반드시 JSON 배열만 출력하고 다른 설명은 하지 마세요.`
+
+    const message = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 300,
       messages: [
-        {
-          role: 'system',
-          content: '당신은 브레인스토밍을 도와주는 창의적인 AI입니다. 주어진 주제에 대해 다양한 관점의 하위 주제를 제안합니다.',
-        },
         {
           role: 'user',
           content: prompt,
         },
       ],
-      temperature: 0.8,
-      max_tokens: 200,
     })
 
-    const responseText = completion.choices[0]?.message?.content || '[]'
+    const responseText = message.content[0].type === 'text' ? message.content[0].text : '[]'
 
     // JSON 추출 (```json ... ``` 형식일 수도 있음)
     let keywords: string[] = []
@@ -109,28 +108,28 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       console.error('JSON 파싱 실패:', responseText)
       // 파싱 실패 시 기본값
-      keywords = ['관련 주제 1', '관련 주제 2', '관련 주제 3', '관련 주제 4', '관련 주제 5']
+      keywords = generateMockKeywords(keyword)
     }
 
     // 배열인지 확인
-    if (!Array.isArray(keywords)) {
-      keywords = ['관련 주제 1', '관련 주제 2', '관련 주제 3', '관련 주제 4', '관련 주제 5']
+    if (!Array.isArray(keywords) || keywords.length === 0) {
+      keywords = generateMockKeywords(keyword)
     }
 
-    return NextResponse.json({ keywords, mock: false })
+    return NextResponse.json({ keywords, mock: false, ai: 'claude' })
   } catch (error: any) {
     console.error('Error:', error)
 
-    // 429 에러 (크레딧 부족) 시 자동으로 Mock 모드로 전환
-    if (error.status === 429 || error.code === 'insufficient_quota') {
-      console.log('💳 OpenAI 크레딧 부족 - Mock 모드로 전환')
-      const { keyword } = await request.json()
+    // 크레딧 부족 또는 API 키 문제 시 자동으로 Mock 모드로 전환
+    if (error.status === 429 || error.status === 401 || error.code === 'insufficient_quota') {
+      console.log('💳 Claude API 문제 - Mock 모드로 전환')
+      const { keyword } = await request.json().catch(() => ({ keyword: '테스트' }))
       const keywords = generateMockKeywords(keyword)
 
       return NextResponse.json({
         keywords,
         mock: true,
-        warning: '⚠️ OpenAI API 크레딧이 부족합니다. Mock 데이터로 실행 중입니다. https://platform.openai.com/account/billing 에서 크레딧을 충전하세요.'
+        warning: '⚠️ Claude API 키가 없거나 크레딧이 부족합니다. Mock 데이터로 실행 중입니다. https://console.anthropic.com/settings/keys 에서 API 키를 발급받으세요.'
       })
     }
 
@@ -139,7 +138,7 @@ export async function POST(request: NextRequest) {
       {
         error: '서버 오류가 발생했습니다.',
         details: errorMessage,
-        apiKeySet: !!process.env.OPENAI_API_KEY
+        apiKeySet: !!(process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY)
       },
       { status: 500 }
     )

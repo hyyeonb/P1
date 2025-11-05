@@ -15,15 +15,24 @@ AI 기반 무한 확장 브레인스토밍 마인드맵
 
 ### 1. 환경 변수 설정
 
-**중요:** Next.js에서 환경 변수가 제대로 작동하려면:
+**이제 Claude API를 사용합니다!** (OpenAI보다 나을 수 있음)
 
-#### Option A: .env.local 파일 사용
+#### Option A: .env.local 파일 사용 (추천)
 
 `brainflow` 폴더(package.json이 있는 곳)에 `.env.local` 파일을 생성:
 
 ```bash
-OPENAI_API_KEY=sk-your-key-here
+# Claude API (추천!)
+ANTHROPIC_API_KEY=sk-ant-your-key-here
+
+# 또는 OpenAI (선택)
+# OPENAI_API_KEY=sk-your-key-here
 ```
+
+**Claude API 키 발급:**
+1. https://console.anthropic.com/settings/keys 접속
+2. "Create Key" 클릭
+3. 키 복사해서 위에 붙여넣기
 
 **주의사항:**
 - 파일 위치: `C:\STN\ETC\P1\brainflow\.env.local` (Windows)
@@ -36,11 +45,20 @@ OPENAI_API_KEY=sk-your-key-here
 
 ```powershell
 # PowerShell에서 (임시)
-$env:OPENAI_API_KEY = "sk-your-key-here"
+$env:ANTHROPIC_API_KEY = "sk-ant-your-key-here"
 npm run dev
 
 # 또는 영구 설정 (관리자 권한)
-[Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "sk-your-key-here", "User")
+[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "sk-ant-your-key-here", "User")
+```
+
+#### Option C: Mock 모드 (API 없이 테스트)
+
+API 키가 없어도 Mock 데이터로 UI/UX 테스트 가능:
+
+```bash
+# .env.local에 추가
+MOCK_MODE=true
 ```
 
 ### 2. 의존성 설치
@@ -94,7 +112,7 @@ $env:OPENAI_API_KEY="sk-your-key"; npm run dev
 
 - **Frontend**: Next.js 14, React, TypeScript
 - **UI**: TailwindCSS, React Flow
-- **AI**: OpenAI GPT-3.5 Turbo
+- **AI**: Claude 3.5 Sonnet (Anthropic) - OpenAI도 지원
 - **Deploy**: Vercel
 
 ## 📁 프로젝트 구조
