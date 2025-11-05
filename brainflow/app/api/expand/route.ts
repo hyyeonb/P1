@@ -77,10 +77,15 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ keywords })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error:', error)
+    const errorMessage = error?.message || error?.toString() || '서버 오류가 발생했습니다.'
     return NextResponse.json(
-      { error: '서버 오류가 발생했습니다.' },
+      {
+        error: '서버 오류가 발생했습니다.',
+        details: errorMessage,
+        apiKeySet: !!process.env.OPENAI_API_KEY
+      },
       { status: 500 }
     )
   }
