@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import ReactFlow, {
   Node,
   Edge,
@@ -34,11 +34,11 @@ export default function BrainFlowCanvas({ initialKeyword }: BrainFlowCanvasProps
   const [loadingNodeId, setLoadingNodeId] = useState<string | null>(null)
 
   // 초기 노드 생성
-  useState(() => {
+  useEffect(() => {
     const initialNode: Node = {
       id: '0',
       type: 'custom',
-      position: { x: window.innerWidth / 2 - 100, y: 100 },
+      position: { x: typeof window !== 'undefined' ? window.innerWidth / 2 - 100 : 400, y: 100 },
       data: {
         label: initialKeyword,
         keyword: initialKeyword,
@@ -49,7 +49,8 @@ export default function BrainFlowCanvas({ initialKeyword }: BrainFlowCanvasProps
       },
     }
     setNodes([initialNode])
-  })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialKeyword, setNodes]) // initialKeyword가 바뀔 때만 재생성
 
   async function handleNodeExpand(nodeId: string, keyword: string) {
     if (expandedNodes.has(nodeId)) return
