@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import ReactFlow, {
   Node,
   Edge,
@@ -29,49 +29,42 @@ export default function BrainFlowCanvas({ initialKeyword }: BrainFlowCanvasProps
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [isLoading, setIsLoading] = useState(false)
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
-
   const [loadingProgress, setLoadingProgress] = useState(0)
-  const [loadingNodeId, setLoadingNodeId] = useState<string | null>(null)
 
-  // 초기 노드 생성
+  // useRef로 최신 nodes를 항상 참조
+  const nodesRef = useRef(nodes)
   useEffect(() => {
-    const initialNode: Node = {
-      id: '0',
-      type: 'custom',
-      position: { x: typeof window !== 'undefined' ? window.innerWidth / 2 - 100 : 400, y: 100 },
-      data: {
-        label: initialKeyword,
-        keyword: initialKeyword,
-        onExpand: handleNodeExpand,
-        onRegenerate: handleRegenerate,
-        isExpanded: false,
-        isLoading: false,
-      },
-    }
-    setNodes([initialNode])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialKeyword, setNodes]) // initialKeyword가 바뀔 때만 재생성
+    nodesRef.current = nodes
+  }, [nodes])
 
-  async function handleNodeExpand(nodeId: string, keyword: string) {
-    if (expandedNodes.has(nodeId)) return
+  // 노드 확장 함수 (useCallback으로 안정화)
+  const handleNodeExpand = useCallback(async (nodeId: string, keyword: string) => {
+    console.log('🔍 handleNodeExpand 호출:', { nodeId, keyword, nodesCount: nodesRef.current.length })
 
-    // 현재 노드 찾기 (먼저 찾아야 함!)
-    const currentNode = nodes.find(n => n.id === nodeId)
+    // 이미 확장된 노드는 무시
+    setExpandedNodes(prev => {
+      if (prev.has(nodeId)) {
+        console.log('⚠️ 이미 확장된 노드:', nodeId)
+        return prev
+      }
+      return prev
+    })
+
+    // 현재 노드 찾기 (ref 사용으로 항상 최신 값)
+    const currentNode = nodesRef.current.find(n => n.id === nodeId)
     if (!currentNode) {
-      console.error('Node not found:', nodeId)
+      console.error('❌ 노드를 찾을 수 없습니다:', nodeId, 'Available nodes:', nodesRef.current.map(n => n.id))
       return
     }
 
+    console.log('✅ 노드 찾음:', currentNode)
+
     setIsLoading(true)
-    setLoadingNodeId(nodeId)
     setLoadingProgress(0)
 
     // 로딩 바 애니메이션
     const progressInterval = setInterval(() => {
-      setLoadingProgress(prev => {
-        if (prev >= 90) return prev
-        return prev + 10
-      })
+      setLoadingProgress(prev => Math.min(prev + 10, 90))
     }, 200)
 
     // 노드를 로딩 상태로 변경
@@ -84,26 +77,30 @@ export default function BrainFlowCanvas({ initialKeyword }: BrainFlowCanvasProps
     )
 
     try {
+      console.log('🌐 API 호출 중...')
       const response = await fetch('/api/expand', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword }),
       })
 
-      if (!response.ok) throw new Error('Failed to expand')
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
 
       const data = await response.json()
-      console.log('API Response:', data) // 디버깅용
+      console.log('📦 API 응답:', data)
+
       const childKeywords: string[] = data.keywords
 
       if (!childKeywords || childKeywords.length === 0) {
-        throw new Error('No keywords returned')
+        throw new Error('키워드가 없습니다')
       }
 
       // 자식 노드들 생성
       const newNodes: Node[] = []
       const newEdges: Edge[] = []
-      const radius = 200
+      const radius = 250
       const angleStep = (2 * Math.PI) / childKeywords.length
 
       childKeywords.forEach((childKeyword, index) => {
@@ -120,8 +117,6 @@ export default function BrainFlowCanvas({ initialKeyword }: BrainFlowCanvasProps
           data: {
             label: childKeyword,
             keyword: childKeyword,
-            onExpand: handleNodeExpand,
-            onRegenerate: handleRegenerate,
             isExpanded: false,
             isLoading: false,
           },
@@ -139,6 +134,9 @@ export default function BrainFlowCanvas({ initialKeyword }: BrainFlowCanvasProps
         newEdges.push(edge)
       })
 
+      console.log('✨ 새 노드 생성:', newNodes.length)
+
+      // 상태 업데이트
       setNodes((nds) =>
         nds.map((node) =>
           node.id === nodeId
@@ -149,9 +147,12 @@ export default function BrainFlowCanvas({ initialKeyword }: BrainFlowCanvasProps
       setEdges((eds) => eds.concat(newEdges))
       setExpandedNodes((prev) => new Set([...prev, nodeId]))
       setLoadingProgress(100)
-    } catch (error) {
-      console.error('Error expanding node:', error)
-      alert('노드 확장 중 오류가 발생했습니다. API 키를 확인해주세요.')
+
+      console.log('🎉 노드 확장 완료!')
+    } catch (error: any) {
+      console.error('❌ 에러 발생:', error)
+      alert(`노드 확장 중 오류: ${error.message}`)
+
       // 로딩 상태 제거
       setNodes((nds) =>
         nds.map((node) =>
@@ -163,26 +164,24 @@ export default function BrainFlowCanvas({ initialKeyword }: BrainFlowCanvasProps
     } finally {
       clearInterval(progressInterval)
       setIsLoading(false)
-      setLoadingNodeId(null)
       setTimeout(() => setLoadingProgress(0), 500)
     }
-  }
+  }, [setNodes, setEdges, setExpandedNodes])
 
-  async function handleRegenerate(nodeId: string, keyword: string) {
-    // 기존 자식 노드들 삭제
-    const childNodeIds = nodes
-      .filter(n => n.id.startsWith(`${nodeId}-`))
-      .map(n => n.id)
+  // 재생성 함수
+  const handleRegenerate = useCallback(async (nodeId: string, keyword: string) => {
+    console.log('🔄 재생성:', nodeId)
 
-    setNodes((nds) => nds.filter(n => !childNodeIds.includes(n.id)))
-    setEdges((eds) => eds.filter(e => !childNodeIds.includes(e.target)))
+    // 자식 노드들 삭제
+    setNodes((nds) => nds.filter(n => !n.id.startsWith(`${nodeId}-`) || n.id === nodeId))
+    setEdges((eds) => eds.filter(e => !e.source.startsWith(`${nodeId}-`) && !e.target.startsWith(`${nodeId}-`)))
     setExpandedNodes((prev) => {
       const newSet = new Set(prev)
       newSet.delete(nodeId)
       return newSet
     })
 
-    // 노드를 미확장 상태로 변경
+    // 노드를 미확장 상태로
     setNodes((nds) =>
       nds.map((node) =>
         node.id === nodeId
@@ -191,9 +190,51 @@ export default function BrainFlowCanvas({ initialKeyword }: BrainFlowCanvasProps
       )
     )
 
-    // 다시 확장
-    await handleNodeExpand(nodeId, keyword)
-  }
+    // 잠시 대기 후 다시 확장
+    setTimeout(() => {
+      handleNodeExpand(nodeId, keyword)
+    }, 100)
+  }, [setNodes, setEdges, setExpandedNodes, handleNodeExpand])
+
+  // 노드 클릭 핸들러
+  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+    console.log('🖱️ 노드 클릭:', node.id, node.data)
+
+    if (node.data.isExpanded) {
+      // 이미 확장된 노드 - 재생성
+      if (node.data.keyword) {
+        handleRegenerate(node.id, node.data.keyword)
+      }
+    } else {
+      // 미확장 노드 - 확장
+      if (node.data.keyword) {
+        handleNodeExpand(node.id, node.data.keyword)
+      }
+    }
+  }, [handleNodeExpand, handleRegenerate])
+
+  // 초기 노드 생성
+  useEffect(() => {
+    console.log('🎬 초기 노드 생성:', initialKeyword)
+
+    const initialNode: Node = {
+      id: '0',
+      type: 'custom',
+      position: {
+        x: (typeof window !== 'undefined' ? window.innerWidth / 2 : 500) - 72,
+        y: 100
+      },
+      data: {
+        label: initialKeyword,
+        keyword: initialKeyword,
+        isExpanded: false,
+        isLoading: false,
+      },
+    }
+
+    setNodes([initialNode])
+    console.log('✅ 초기 노드 설정 완료')
+  }, [initialKeyword, setNodes])
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -240,6 +281,7 @@ export default function BrainFlowCanvas({ initialKeyword }: BrainFlowCanvasProps
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeClick={onNodeClick}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
         fitView
