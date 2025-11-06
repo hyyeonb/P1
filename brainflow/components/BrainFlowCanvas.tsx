@@ -54,6 +54,13 @@ export default function BrainFlowCanvas({ initialKeyword }: BrainFlowCanvasProps
   async function handleNodeExpand(nodeId: string, keyword: string) {
     if (expandedNodes.has(nodeId)) return
 
+    // 현재 노드 찾기 (먼저 찾아야 함!)
+    const currentNode = nodes.find(n => n.id === nodeId)
+    if (!currentNode) {
+      console.error('Node not found:', nodeId)
+      return
+    }
+
     setIsLoading(true)
     setLoadingNodeId(nodeId)
     setLoadingProgress(0)
@@ -85,11 +92,12 @@ export default function BrainFlowCanvas({ initialKeyword }: BrainFlowCanvasProps
       if (!response.ok) throw new Error('Failed to expand')
 
       const data = await response.json()
+      console.log('API Response:', data) // 디버깅용
       const childKeywords: string[] = data.keywords
 
-      // 현재 노드 찾기
-      const currentNode = nodes.find(n => n.id === nodeId)
-      if (!currentNode) return
+      if (!childKeywords || childKeywords.length === 0) {
+        throw new Error('No keywords returned')
+      }
 
       // 자식 노드들 생성
       const newNodes: Node[] = []
